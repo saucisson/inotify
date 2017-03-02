@@ -1,0 +1,12 @@
+FROM saucisson/ws-inotify-dev
+
+ADD . /src
+
+RUN cd /src \
+ && luarocks make rockspec/ws-inotify-master-1.rockspec \
+ && rm -rf /src
+
+VOLUME      ["/data"]
+EXPOSE      8080
+ENTRYPOINT  ["ws-inotify"]
+CMD         ["--port=8080", "--directory=/data"]
