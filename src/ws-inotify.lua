@@ -52,6 +52,12 @@ local parser = Arguments () {
   name        = "ws-inotify",
   description = "Inotify with websocket",
 }
+parser:flag "--mime" {
+  description = "compute mime type",
+}
+parser:flag "--md5" {
+  description = "compute md5",
+}
 parser:option "--port" {
   description = "port",
   convert     = tonumber,
@@ -71,13 +77,12 @@ local function walk (path)
   if Lfs.attributes (path, "mode") == "directory" then
     info [path] = {
       type    = "directory",
-      mime    = magic:file (path),
       path    = path:sub (#arguments.directory+1),
       watcher = info [path]
              and info [path].watcher
               or inotify:addwatch (path, options),
     }
-    print ("addwatch", path)
+    print ("watch", path)
     if info [path].watcher then
       info [info [path].watcher] = info [path]
     end
@@ -92,9 +97,9 @@ local function walk (path)
     file:close ()
     info [path] = {
       type = "file",
-      mime = magic:file (path),
       path = path:sub (#arguments.directory+1),
-      md5  = md5,
+      mime = arguments.mime and magic:file (path),
+      md5  = arguments.md5 and md5,
     }
   end
 end
@@ -116,7 +121,6 @@ Websocket.server.copas.listen {
     while ws.state == "OPEN" do
       pcall (function ()
         local message = ws:receive ()
-        print ("message:", message)
         message = Json.decode (message)
         if message.type == "list" then
           local result = {}
@@ -172,10 +176,12 @@ Copas.addthread (function ()
       elseif message.delete then
         info [event.name] = nil
       elseif message.delete_self then
+        print ("unwatch", info [event.wd].path)
         info [info [event.wd].path] = nil
         info [event.wd] = nil
         inotify:rmwatch (event.wd)
       elseif message.move_self then
+        print ("unwatch", info [event.wd].path)
         info [info [event.wd].path] = nil
         info [event.wd] = nil
         inotify:rmwatch (event.wd)
@@ -185,7 +191,6 @@ Copas.addthread (function ()
         walk (arguments.directory .. "/" .. event.name)
       end
       message = Json.encode (message)
-      print (message)
       for ws in pairs (clients) do
         ws:send (message)
       end
